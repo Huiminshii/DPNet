@@ -1,6 +1,6 @@
 _base_ = [
- '/home/shm/mmdetection/configs/_base_/default_runtime.py', 
- '/home/shm/mmdetection/configs/_base_/schedules/schedule_1x.py',
+ '../_base_/default_runtime.py', 
+ '../_base_/schedules/schedule_1x.py',
 ]
 # model settings
 model = dict(
@@ -15,7 +15,7 @@ model = dict(
         residual=False,
         multi3x3=False,
         kernel_size=5,
-        use_se='polar_pyramid2_avgpool',
+        use_se='LSAM',
         pool_size=5,
         groups=8,
         channel_down=8),
@@ -123,7 +123,7 @@ lr_config = dict(
     warmup_iters=5,  # 5 epoch
     num_last_epochs=15,
     min_lr_ratio=0.05)
-runner = dict(type='EpochBasedRunner', max_epochs=65)
+runner = dict(type='EpochBasedRunner', max_epochs=300)
 
 resume_from = None
 interval = 10

@@ -13,42 +13,60 @@ from mmdet.utils import get_root_logger
 import math
 
         
-class SKAttn(BaseModule):
+class LSAM_Pyramid2(BaseModule):
+    def __init__(self, input_size,channel=128,channel_down=2,pool_size=7):
+        super().__init__()
+        self.pool_size=pool_size
+        self.input_size=input_size
+        self.channel=channel
+        self.channel_down=channel_down if channel_down>0 else channel
+        self.ch_wv=nn.Conv2d(channel,channel//self.channel_down+1+channel//self.channel_down,kernel_size=(1,1))
 
+        self.ch_wz=nn.Conv2d(channel//self.channel_down,channel,kernel_size=(1,1))
+        self.ln=nn.LayerNorm(channel)
+        self.sigmoid=nn.Sigmoid()
+        self.sp_wv=nn.Conv2d(channel,channel//self.channel_down,kernel_size=(1,1))
 
-    def __init__(self, channel, groups=8,channel_down=2):
-        super(SKAttn, self).__init__()
-        self.groups = groups
-        self.channel_down=channel_down
-        
-        self.pola_attn=PSA_p(channel//groups,channel//groups)
-        
-        self.cweight = Parameter(torch.zeros(1, channel //  groups, 1, 1))
-        self.cbias = Parameter(torch.ones(1, channel // groups, 1, 1))
-        self.sweight = Parameter(torch.zeros(1, channel // groups, 1, 1))
-        self.sbias = Parameter(torch.ones(1, channel // groups, 1, 1))
-        
+        stride=math.floor(input_size / pool_size ) 
+        kenerl_size=input_size-(pool_size-1)*stride
+        self.agp=nn.AvgPool2d(kernel_size=kenerl_size,stride=stride)
+        self.sp_wz=nn.Conv2d(pool_size*pool_size,1,kernel_size=(1,1))
+        self.out=nn.Identity()
+
     def forward(self, x):
-        b, c, h, w = x.shape
-
-        x = x.reshape(b * self.groups, -1, h, w)
-
-        #out_spital = self.pola_attn.spatial_pool(x)*self.sweight+self.sbias
+        b, c, h, w = x.size()
         
-        #out_channel=self.pola_attn.channel_pool(x)*self.cweight+self.cbias
+        pool_x=self.agp(x)
+        pool_x=self.ch_wv(pool_x) 
+        #Channel Self-Attention
+        channel_wv=pool_x[:,0:self.channel//self.channel_down,:]#bs,c//2,h,w
+        channel_wq=pool_x[:,self.channel//self.channel_down:self.channel//self.channel_down+1,:] #bs,1,h,w
+        channel_wv=channel_wv.reshape(b,c//self.channel_down,-1) #bs,c//2,h*w
+        channel_wq=channel_wq.reshape(b,-1,1) #bs,h*w,1
+
+        channel_wz=torch.matmul(channel_wv,channel_wq).unsqueeze(-1) #bs,c//2,1,1
+        channel_weight=self.sigmoid(self.ln(self.ch_wz(channel_wz).reshape(b,c,1).permute(0,2,1))).permute(0,2,1).reshape(b,c,1,1) #bs,c,1,1
+        channel_out=channel_weight*x
+
+        #Spatial Self-Attention
+        spatial_wv=self.sp_wv(x) #bs,c//2,h,w
+        spatial_wv=spatial_wv.reshape(b,c//self.channel_down,-1)
+        spatial_wq=pool_x[:,self.channel//self.channel_down+1:,:] 
+        spatial_wq=spatial_wq.permute(0,2,3,1).reshape(b,self.pool_size*self.pool_size,c//self.channel_down)
+        #spatial_wq=self.softmax(spatial_wq)
+
+        spatial_wz=torch.matmul(spatial_wq,spatial_wv) #bs,1,h*w
+        spatial_weight=self.sigmoid(self.sp_wz(spatial_wz.reshape(b,self.pool_size*self.pool_size,h,w))) #bs,1,h,w
+        spatial_out=spatial_weight*x
         
-        out = self.pola_attn.spatial_pool(x)*self.sweight+self.sbias+self.pola_attn.channel_pool(x)*self.cweight+self.cbias
-
-        out = out.reshape(b, -1, h, w)
-
+        out= self.out(spatial_out+channel_out)
 
         return out
-
  
         
    
 class LSAM_avgpool(BaseModule):
-    def __init__(self,input_size, channel=128,channel_down=2,pool_size=7):
+    def __init__(self,input_size, channel=128,channel_down=2,pool_size=5):
         super().__init__()
         self.pool_size=pool_size
         self.input_size=input_size
@@ -311,7 +329,7 @@ class InvertedResidual(BaseModule):
                     conv_cfg=conv_cfg,
                     norm_cfg=norm_cfg,
                     act_cfg=act_cfg)) 
-        elif use_se=='LSAM_avgpool':
+        elif use_se=='LSAM':
             self.branch2 = nn.Sequential(
                 ConvModule(
                     in_channels if (self.downsample==True) else branch_features,
@@ -332,7 +350,7 @@ class InvertedResidual(BaseModule):
                     conv_cfg=conv_cfg,
                     norm_cfg=norm_cfg,
                     act_cfg=None),
-                LSAM_avgpool(input_size,branch_features,channel_down, self.pool_size),
+                LSAM_Pyramid2(input_size,branch_features,channel_down, self.pool_size),
                 ConvModule(
                     branch_features,
                     branch_features,

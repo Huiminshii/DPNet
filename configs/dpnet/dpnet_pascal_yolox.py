@@ -1,6 +1,6 @@
 _base_ = [
- '/home/shm/mmdetection/configs/_base_/default_runtime.py', 
- '/home/shm/mmdetection/configs/_base_/schedules/schedule_1x.py',
+ '../_base_/default_runtime.py', 
+ '../_base_/schedules/schedule_1x.py',
 ]
 # model settings
 model = dict(
@@ -15,7 +15,7 @@ model = dict(
         residual=False,
         multi3x3=False,
         kernel_size=5,
-        use_se='LSAM_avgpool',
+        use_se='LSAM',
         pool_size=5,
         groups=8,
         channel_down=8),
@@ -110,7 +110,7 @@ data = dict(
         
 optimizer = dict(
     type='SGD',
-    lr=batch_size*0.02/128.0,
+    lr=1e-4,
     momentum=0.9,
     weight_decay=5e-4,
     nesterov=True,
@@ -125,10 +125,10 @@ lr_config = dict(
     by_epoch=False,
     warmup_by_epoch=True,
     warmup_ratio=1,
-    warmup_iters=5,  # 5 epoch
-    num_last_epochs=15,
+    warmup_iters=1,  # 1 epoch
+    num_last_epochs=0,
     min_lr_ratio=0.05)
-runner = dict(type='EpochBasedRunner', max_epochs=65)
+runner = dict(type='EpochBasedRunner', max_epochs=2)
 
 resume_from = None
 interval = 10
@@ -150,6 +150,6 @@ custom_hooks = [
         momentum=0.0001,
         priority=49)
 ]
-checkpoint_config = dict(interval=5)
+checkpoint_config = dict(interval=1)
 log_config = dict(interval=50)
-load_from="/home/shm/mmdetection/work_dirs/Final_model_LCAM_single5x5_lsam_avgpoool_yolox2/epoch_330.pth"
+load_from="/home/shm/mmdetection/work_dirs/latest.pth"

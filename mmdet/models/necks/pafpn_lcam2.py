@@ -9,7 +9,7 @@ from ..builder import NECKS
 
 
 from mmcv.cnn import ConvModule, DepthwiseSeparableConvModule
-class LCAM_Pyramid2_avgpool_TD(BaseModule):
+class LCAM_avgpool_TD(BaseModule):
     def __init__(self,input_size, channel=128,channel_down=2,pool_size=7):
         super().__init__()
         self.pool_size=pool_size
@@ -78,7 +78,7 @@ class LCAM_Pyramid2_avgpool_TD(BaseModule):
         out= self.out(spatial_out+channel_out+x_high)
 
         return out  
-class LCAM_Pyramid2_avgpool_BU(BaseModule):
+class LCAM_avgpool_BU(BaseModule):
     def __init__(self,input_size, channel=128,channel_down=2,pool_size=7):
         super().__init__()
         self.pool_size=pool_size
@@ -325,8 +325,8 @@ class PAFPN_LCAM(BaseModule):
         input_size2=[0,20,10]
         
         for i in range(self.start_level + 1, self.backbone_end_level):
-            d_attn = LCAM_Pyramid2_avgpool_TD(input_size2[i],out_channels,channel_down,pool_size)
-            up_attn = LCAM_Pyramid2_avgpool_BU(input_size2[i],out_channels,channel_down,pool_size)
+            d_attn = LCAM_avgpool_TD(input_size2[i],out_channels,channel_down,pool_size)
+            up_attn = LCAM_avgpool_BU(input_size2[i],out_channels,channel_down,pool_size)
             self.downsample_attn.append(d_attn)
             self.up_attn.append(up_attn)
             
